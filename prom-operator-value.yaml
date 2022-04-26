@@ -1,0 +1,25 @@
+prometheus:
+  prometheusSpec:
+    thanos:
+      baseImage: quay.io/thanos/thanos
+      version: v0.25.2
+      objectStorageConfig:
+        key: thanos.yaml
+        name: thanos-objectstorage
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+    externalLabels:
+      cluster: k8s-ww
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: "disk-ssd"

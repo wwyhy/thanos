@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: thanos-objectstorage
+  namespace: monitoring-system
+type: Opaque
+stringData:
+  thanos.yaml: |
+    type: S3
+    config:
+        bucket: "thanos"
+        endpoint: "10.x.x.x:9000"
+        insecure: true
+        access_key: "minio-key"
+        secret_key: "minio-secret"

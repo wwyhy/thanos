@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/component: object-store-gateway
+    app.kubernetes.io/instance: thanos-store-0
+    app.kubernetes.io/name: thanos-store
+    app.kubernetes.io/version: v0.25.2
+    store.thanos.io/shard: shard-0
+  name: thanos-store-0
+  namespace: monitoring-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: object-store-gateway
+      app.kubernetes.io/instance: thanos-store-0
+      app.kubernetes.io/name: thanos-store
+      store.thanos.io/shard: shard-0
+  serviceName: thanos-store-0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: object-store-gateway
+        app.kubernetes.io/instance: thanos-store-0
+        app.kubernetes.io/name: thanos-store
+        app.kubernetes.io/version: v0.25.2
+        store.thanos.io/shard: shard-0
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - thanos-store
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                  - thanos-store-0
+              namespaces:
+              - thanos
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      containers:
+      - args:
+        - store
+        - --log.level=info
+        - --log.format=logfmt
+        - --data-dir=/var/thanos/store
+        - --grpc-address=0.0.0.0:10901
+        - --http-address=0.0.0.0:10902
+        - --objstore.config=$(OBJSTORE_CONFIG)
+        #- --ignore-deletion-marks-delay=24h
+        - |
+          --selector.relabel-config=
+            - action: hashmod
+              source_labels: ["__block_id"]
+              target_label: shard
+              modulus: 2
+            - action: keep
+              source_labels: ["shard"]
+              regex: 0
+        env:
+        - name: OBJSTORE_CONFIG
+          valueFrom:
+            secretKeyRef:
+              key: thanos.yaml
+              name: thanos-objectstorage
+        - name: HOST_IP_ADDRESS
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        image: quay.io/thanos/thanos:v0.25.2
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 8
+          httpGet:
+            path: /-/healthy
+            port: 10902
+            scheme: HTTP
+          periodSeconds: 30
+        name: thanos-store
+        ports:
+        - containerPort: 10901
+          name: grpc
+        - containerPort: 10902
+          name: http
+        readinessProbe:
+          failureThreshold: 20
+          httpGet:
+            path: /-/ready
+            port: 10902
+            scheme: HTTP
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 0.5
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/thanos/store
+          name: data
+          readOnly: false
+      #nodeSelector:
+      #  kubernetes.io/os: linux
+      securityContext:
+        fsGroup: 65534
+        runAsUser: 65534
+      serviceAccountName: thanos-store
+      terminationGracePeriodSeconds: 120
+      volumes: []
+  volumeClaimTemplates:
+  - metadata:
+      labels:
+        app.kubernetes.io/component: object-store-gateway
+        app.kubernetes.io/instance: thanos-store-0
+        app.kubernetes.io/name: thanos-store
+        store.thanos.io/shard: shard-0
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+      storageClassName: "disk-ssd"
